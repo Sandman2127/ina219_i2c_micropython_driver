@@ -2,7 +2,7 @@
 
 import time
 import machine
-from ina219 import INA219  # micropython version
+from ina219 import INA219  # micropython version: https://github.com/chrisb2/pyb_ina219
 
 # circuit python version
 # sudo pip3 install adafruit-circuitpython-ina219
