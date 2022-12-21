@@ -45,7 +45,6 @@ def rewrite_display(voltage,current,power,prev_data):
     output = [power,voltage,current]
     return output
 
-
 def write_display_nonchanging_sections():
     header = ""
     display.fill(0)
