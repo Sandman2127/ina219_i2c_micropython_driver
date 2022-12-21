@@ -1,24 +1,13 @@
-# use circuit python
+# use micropython
 
 import time
 import machine
-from ina219 import INA219  # micropython version: https://github.com/chrisb2/pyb_ina219
-
-# circuit python version
-# sudo pip3 install adafruit-circuitpython-ina219
-# import board
-# import busio 
-# import adafruit_ina219  
-
+import ssd1306
+#from ina219 import INA219  # micropython version: https://github.com/chrisb2/pyb_ina219
 
 # general i2c stuff 
 # print('Scan i2c bus...')
 # devices = i2c.scan()
-
-# ina219
-# sda_sensor = machine.Pin(16)
-# scl_sensor = machine.Pin(17)
-# i2c = machine.I2C(1,sda=sda_sensor,scl=scl_sensor,freq=400000)
 
 # if len(devices) == 0:
 # print("No i2c device !")
@@ -29,12 +18,10 @@ from ina219 import INA219  # micropython version: https://github.com/chrisb2/pyb
 # print("Decimal address: ",device," | Hexa address: ",hex(device))
 
 
-
-
 # perform setup of globals
 # screen
-sda_screen = machine.Pin(1)
-scl_screen = machine.Pin(2)
+sda_screen = machine.Pin(0)
+scl_screen = machine.Pin(1)
 i2c_screen = machine.I2C(0,sda=sda_screen,scl=scl_screen,freq=400000)
 display = ssd1306.SSD1306_I2C(128, 64, i2c_screen)
 
@@ -42,6 +29,87 @@ display = ssd1306.SSD1306_I2C(128, 64, i2c_screen)
 sda_sensor = machine.Pin(16)
 scl_sensor = machine.Pin(17)
 i2c_sensor = machine.I2C(1,sda=sda_sensor,scl=scl_sensor,freq=400000)
+
+def rewrite_display(voltage,current,power,prev_data):
+    #https://docs.micropython.org/en/latest/esp8266/tutorial/ssd1306.html
+    # overwrite the old stuff
+    prev_power,prev_voltage,prev_current = prev_data[0],prev_data[1],prev_data[2]
+    display.text(str(round(prev_power,4)),70,0,0)
+    display.text(str(round(prev_voltage,4)),70,24,0)
+    display.text(str(round(prev_current,4)),70,48,0)
+    # write the new stuff
+    display.text(str(round(power,4)),70,0,1)
+    display.text(str(round(voltage,4)),70,24,1)
+    display.text(str(round(current,4)),70,48,1)
+    display.show()
+    output = [power,voltage,current]
+    return output
+
+
+def write_display_nonchanging_sections():
+    header = ""
+    display.fill(0)
+    display.text('Power:', 5, 0, 1)
+    display.text('Voltage:', 5, 24, 1)
+    display.text('Current:', 5, 48, 1)
+    display.show()
+
+### for debug only
+# class INA219:
+#     def __init__(self):
+#         self.voltage = 0.100
+#         self.current = 0.219
+#         self.power = self.voltage * self.current
+        
+#     def fluctuate_voltage(self,input):
+#         self.voltage = self.voltage + input
+#         self.power = self.voltage * self.current
+        
+#     def fluctuate_current(self,input):
+#         self.current = self.current + input
+#         self.power = self.voltage * self.current
+# ina = INA219()
+# randomlist = []
+# for i in range(0,1000):
+#     n = random.randint(-1,1)
+#     randomlist.append(n)
+
+# setup ina219 
+SHUNT_OHMS = 0.1  # Check value of shunt used with your INA219
+ina = INA219(SHUNT_OHMS,i2c_sensor)
+I2C_INTERFACE_NO = 2
+ina = INA219(SHUNT_OHMS,I2C(I2C_INTERFACE_NO))
+ina.configure()
+# write displays never changing functions 
+write_display_nonchanging_sections()
+# measure and display loop
+run_loop = 1
+passed_rnd_1 = False
+
+while True:
+    ### for the micropython  ### 
+    # print("Bus Voltage: %.3f V" % ina.voltage())
+    # print("Current: %.3f mA" % ina.current())
+    # print("Power: %.3f mW" % ina.power())
+
+    # Check internal calculations haven't overflowed (doesn't detect ADC overflows)
+    if not ina.voltage:
+        print("Internal Overflow Detected!")
+        print("")
+    else:
+        if passed_rnd_1:
+            prev_data = rewrite_display(ina.voltage,ina.current,ina.power,prev_data)
+        else:
+            prev_data = rewrite_display(ina.voltage,ina.current,ina.power,[0,0,0])
+            passed_rnd_1 = True
+        time.sleep_ms(200)
+
+
+# circuit python version
+# sudo pip3 install adafruit-circuitpython-ina219
+# import board
+# import busio 
+# import adafruit_ina219  
 
 # i2c_bus = board.I2C()  # uses board.SCL and board.SDA
 # i2c_bus = board.STEMMA_I2C()  # For using the built-in STEMMA QT connector on a microcontroller
@@ -62,83 +130,3 @@ i2c_sensor = machine.I2C(1,sda=sda_sensor,scl=scl_sensor,freq=400000)
 # ina219.shunt_adc_resolution = ADCResolution.ADCRES_12BIT_32S
 # optional : change voltage range to 16V
 # ina219.bus_voltage_range = BusVoltageRange.RANGE_16V
-
-
-
-
-def rewrite_display(voltage,current,power):
-    #https://docs.micropython.org/en/latest/esp8266/tutorial/ssd1306.html
-    display.txt(str(round(voltage,4)),20,0,1)
-    display.txt(str(round(current,4)),15,24,1)
-    display.txt(str(round(power,4)),10,48,1)
-    display.show()
-
-
-def write_display_nonchanging_sections():
-    header = ""
-    display.fill(0)
-    display.fill_rect(0, 0, 32, 32, 1)
-    display.fill_rect(2, 2, 28, 28, 0)
-    display.vline(9, 8, 22, 1)
-    display.vline(16, 2, 22, 1)
-    display.vline(23, 8, 22, 1)
-    display.fill_rect(26, 24, 2, 4, 1)
-    display.text('MicroPython', 40, 0, 1)
-    display.text('SSD1306', 40, 12, 1)
-    display.text('OLED 128x64', 40, 24, 1)
-    display.show()
-
-
-# setup ina219 
-#I2C_INTERFACE_NO = 2
-SHUNT_OHMS = 0.1  # Check value of shunt used with your INA219
-# I think this is 
-ina = INA219(SHUNT_OHMS,i2c_sensor)
-#I2C_INTERFACE_NO = 2
-#ina = INA219(SHUNT_OHMS,I2C(I2C_INTERFACE_NO))
-ina.configure()
-# write displays never changing functions 
-write_display_nonchanging_sections()
-# measure and display loop
-while True:
-    ### for the micropython  ### 
-    # print("Bus Voltage: %.3f V" % ina.voltage())
-    # print("Current: %.3f mA" % ina.current())
-    # print("Power: %.3f mW" % ina.power())
-
-    # Check internal calculations haven't overflowed (doesn't detect ADC overflows)
-    if not ina.voltage:
-        print("Internal Overflow Detected!")
-        print("")
-    else:
-        rewrite_display(ina.voltage(),ina.current(),ina.power())
-    # time.sleep(1)
-    time.sleep_ms(100)
-
-
-    ### for circuit python ### 
-    # bus_voltage = ina219.bus_voltage  # voltage on V- (load side)
-    # shunt_voltage = ina219.shunt_voltage  # voltage between V+ and V- across the shunt
-    # current = ina219.current  # current in mA
-    # power = ina219.power  # power in watts
-
-    # print("Bus Voltage: %.3f V" % ina.voltage())
-    # print("Current: %.3f mA" % ina.current())
-    # print("Power: %.3f mW" % ina.power())
-
-    # INA219 measure bus voltage on the load side. So PSU voltage = bus_voltage + shunt_voltage
-    # print("Voltage (VIN+) : {:6.3f}   V".format(bus_voltage + shunt_voltage))
-    # print("Voltage (VIN-) : {:6.3f}   V".format(bus_voltage))
-    # print("Shunt Voltage  : {:8.5f} V".format(shunt_voltage))
-    # print("Shunt Current  : {:7.4f}  A".format(current / 1000))
-    # print("Power Calc.    : {:8.5f} W".format(bus_voltage * (current / 1000)))
-    # print("Power Register : {:6.3f}   W".format(power))
-    # print("")
-    # if not ina219.overflow:
-    #     print("Internal Overflow Detected!")
-    #     print("")
-    # else:
-    #     write_display(bus_voltage + shunt_voltage,current,power)
-
-    # time.sleep(1)
-    #time.sleep_ms(100)
