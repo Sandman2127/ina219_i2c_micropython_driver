@@ -16,7 +16,7 @@ import ssd1306
 
 # for device in devices:
 # print("Decimal address: ",device," | Hexa address: ",hex(device))
-
+#
 
 # perform setup of globals
 # screen
