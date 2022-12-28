@@ -99,7 +99,7 @@ else:
             # 0 is the configuration address 
             i2c_sensor.writeto_mem(self.peripheral_address,config_address,startup_buffer)
             
-        def change_pointer_mem_address(self,device,mem_address):
+        def change_pointer_mem_address(self,mem_address):
             print("changing pointer mem_address to:",mem_address)
             print("mem address as a byte array:",return_bytearray_of_address(mem_address))
             i2c_sensor.writeto(self.peripheral_address,return_bytearray_of_address(mem_address)) 
@@ -201,16 +201,20 @@ while True:
     #     print("")
     if voltage_display:
         ina.change_pointer_mem_address(voltage_address)
-        print(ina.get_voltage())
+        ina.get_voltage()
+        print(ina.voltage)
     elif current_display:
-        ina.change_memchange_pointer_mem_address_address(current_address)
-        print(ina.get_current())
+        ina.change_pointer_mem_address(current_address)
+        ina.get_current()
+        print(ina.current)
     elif power_display:
         ina.change_pointer_mem_address(power_address)
-        print(ina.get_power())
+        ina.get_power()
+        print(ina.power)
     elif shunt_display:
         ina.change_pointer_mem_address(shunt_voltage_address)
-        print(ina.get_power())
+        ina.get_power()
+        print(ina.power)
         # if passed_rnd_1:
         #     prev_data = rewrite_display(ina.voltage,ina.current,ina.power,prev_data)
         # else:
