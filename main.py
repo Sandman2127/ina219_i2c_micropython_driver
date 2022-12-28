@@ -6,6 +6,11 @@ from machine import I2C,Pin
 import ssd1306
 from micropython import const
 
+config_address = 0 #'00'
+shunt_voltage_address = 1 #'01'
+voltage_address = 2 #'02'  # hex(2) == '0x2'
+current_address = 3 #'03'
+power_address = 4 #'04'
                             
 def rewrite_display(voltage,current,power,prev_data):
     #https://docs.micropython.org/en/latest/esp8266/tutorial/ssd1306.html
@@ -30,14 +35,17 @@ def write_display_nonchanging_sections():
     display.text('Current:', 5, 48, 1)
     display.show()
     
-def convert_v_byte():
-    pass
+def convert_v_byte(byte_data):
+    return byte_data
 
-def convert_i_byte():
-    pass
+def convert_i_byte(byte_data):
+    return byte_data
 
-def convert_power_byte():
-    pass
+def convert_power_byte(byte_data):
+    return byte_data
+
+def return_bytearray_of_address(int_address):
+    return bytearray(bytes.fromhex('0' + str(int_address)))
 
 """
                     *** MAIN ***
@@ -55,12 +63,7 @@ display = ssd1306.SSD1306_I2C(128, 64, i2c_screen)
 # ina219
 sda_sensor = machine.Pin(0)
 scl_sensor = machine.Pin(1)
-i2c_sensor = machine.I2C(0,sda=sda_sensor,scl=scl_sensor,freq=400000)
-config_address = const(0)
-shunt_voltage_address = const(1)
-voltage_address = const(2)
-current_address = const(3)
-power_address = const(4)         
+i2c_sensor = machine.I2C(0,sda=sda_sensor,scl=scl_sensor,freq=400000)    
 devices = i2c_screen.scan()
 
 ### for debug only
@@ -87,31 +90,43 @@ else:
     class INA219:
         def __init__(self,address_in):
             self.peripheral_address = address_in
+            print("Peripheral address:",self.peripheral_address)
             self.voltage = 0
             self.current = 0
             self.power = 0 
             # initiate communication with the device
-            startup_buffer = bytearray(0x399F)  # '00111001 10011111' 
+            startup_buffer = bytearray([0x399F])  # '00111001 10011111' 
             # 0 is the configuration address 
             i2c_sensor.writeto_mem(self.peripheral_address,config_address,startup_buffer)
             
-        def change_mem_address(device,mem_address):
-            i2c_sensor.writeto(device, b'123') 
+        def change_pointer_mem_address(self,device,mem_address):
+            print("changing pointer mem_address to:",mem_address)
+            print("mem address as a byte array:",return_bytearray_of_address(mem_address))
+            i2c_sensor.writeto(self.peripheral_address,return_bytearray_of_address(mem_address)) 
 
-        def get_voltage():
-            voltage_byte = i2c_sensor.readfrom_mem(self.peripheral_address,voltage_address, 2) # read 2 bytes from the voltage mem address from the peripheral device
+        def get_voltage(self):
+            voltage_byte = i2c_sensor.readfrom_mem(self.peripheral_address,voltage_address,1) # read 2 bytes from the voltage mem address from the peripheral device
             self.voltage = convert_v_byte(voltage_byte)
             time.sleep_ms(1)
-        def get_current():
-            current_byte = i2c_sensor.readfrom_mem(self.peripheral_address,current_address, 2) # read 2 bytes from the current mem address from the peripheral device
+        def get_current(self):
+            current_byte = i2c_sensor.readfrom_mem(self.peripheral_address,current_address,1) # read 2 bytes from the current mem address from the peripheral device
             self.current = convert_i_byte(current_byte)
             time.sleep_ms(1)
-        def get_power():
-            power_byte = i2c_sensor.readfrom_mem(self.address,power_address, 2)  # read 2 bytes from the current mem address from the peripheral device
+        def get_power(self):
+            power_byte = i2c_sensor.readfrom_mem(self.address,power_address,1)  # read 2 bytes from the current mem address from the peripheral device
             self.power = convert_power_byte(power_byte)
             time.sleep_ms(1)
-
         """
+            ina219 specific data:
+            0x399F = 00111001 10011111
+            POINTER_ADDRESS REGISTER_NAME FUNCTION BINARY HEX
+            00  Configuration   All-register reset, settings for bus voltage range, PGA Gain, ADC resolution/averaging.00111001 10011111 399F R/W
+            01  Shunt voltage   Shunt voltage measurement data.Shunt voltage — R
+            02  Bus voltage Bus voltage measurement data.Bus voltage — R
+            03  Power (2)   Power measurement data.00000000 000000000000 R
+            04  Current(2)  Contains the value of the current flowing through the shunt resistor.00000000 000000000000 R
+            05  Calibration Sets full-scale range and LSB of current and power measurements. Overall system calibration.00000000 000000000000 R/W
+
             I2C operations: https://docs.micropython.org/en/latest/library/machine.I2C.html
 
             i2c = I2C(freq=400000)          # create I2C peripheral at frequency of 400kHz
@@ -172,6 +187,8 @@ else:
          print("device:",cnt,dev,hex(dev))
          cnt += 1
 
+voltage_display = True
+
 while True:
     ### for the micropython  ### 
     # print("Bus Voltage: %.3f V" % ina.voltage())
@@ -179,15 +196,26 @@ while True:
     # print("Power: %.3f mW" % ina.power())
 
     # Check internal calculations haven't overflowed (doesn't detect ADC overflows)
-    if not ina.voltage:
-        print("Internal Overflow Detected!")
-        print("")
-    else:
-        if passed_rnd_1:
-            prev_data = rewrite_display(ina.voltage,ina.current,ina.power,prev_data)
-        else:
-            prev_data = rewrite_display(ina.voltage,ina.current,ina.power,[0,0,0])
-            passed_rnd_1 = True
+    # if not ina.voltage:
+    #     print("Internal Overflow Detected!")
+    #     print("")
+    if voltage_display:
+        ina.change_pointer_mem_address(voltage_address)
+        print(ina.get_voltage())
+    elif current_display:
+        ina.change_memchange_pointer_mem_address_address(current_address)
+        print(ina.get_current())
+    elif power_display:
+        ina.change_pointer_mem_address(power_address)
+        print(ina.get_power())
+    elif shunt_display:
+        ina.change_pointer_mem_address(shunt_voltage_address)
+        print(ina.get_power())
+        # if passed_rnd_1:
+        #     prev_data = rewrite_display(ina.voltage,ina.current,ina.power,prev_data)
+        # else:
+        #     prev_data = rewrite_display(ina.voltage,ina.current,ina.power,[0,0,0])
+        #     passed_rnd_1 = True
         time.sleep_ms(1000)
     time.sleep_ms(1000)
 
