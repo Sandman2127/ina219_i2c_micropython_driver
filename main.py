@@ -105,15 +105,15 @@ else:
             i2c_sensor.writeto(self.peripheral_address,return_bytearray_of_address(mem_address)) 
 
         def get_voltage(self):
-            voltage_byte = i2c_sensor.readfrom_mem(self.peripheral_address,voltage_address,1) # read 2 bytes from the voltage mem address from the peripheral device
+            voltage_byte = i2c_sensor.readfrom_mem(self.peripheral_address,voltage_address,2) # read 2 bytes from the voltage mem address from the peripheral device
             self.voltage = convert_v_byte(voltage_byte)
             time.sleep_ms(1)
         def get_current(self):
-            current_byte = i2c_sensor.readfrom_mem(self.peripheral_address,current_address,1) # read 2 bytes from the current mem address from the peripheral device
+            current_byte = i2c_sensor.readfrom_mem(self.peripheral_address,current_address,2) # read 2 bytes from the current mem address from the peripheral device
             self.current = convert_i_byte(current_byte)
             time.sleep_ms(1)
         def get_power(self):
-            power_byte = i2c_sensor.readfrom_mem(self.address,power_address,1)  # read 2 bytes from the current mem address from the peripheral device
+            power_byte = i2c_sensor.readfrom_mem(self.peripheral_address,power_address,2)  # read 2 bytes from the current mem address from the peripheral device
             self.power = convert_power_byte(power_byte)
             time.sleep_ms(1)
         """
@@ -188,7 +188,8 @@ else:
          cnt += 1
 
 voltage_display = True
-
+current_display = False
+power_display = False
 while True:
     ### for the micropython  ### 
     # print("Bus Voltage: %.3f V" % ina.voltage())
@@ -202,19 +203,19 @@ while True:
     if voltage_display:
         ina.change_pointer_mem_address(voltage_address)
         ina.get_voltage()
-        print(ina.voltage)
+        print(list(ina.voltage))
     elif current_display:
         ina.change_pointer_mem_address(current_address)
         ina.get_current()
-        print(ina.current)
+        print(list(ina.current))
     elif power_display:
         ina.change_pointer_mem_address(power_address)
         ina.get_power()
-        print(ina.power)
+        print(list(ina.power))
     elif shunt_display:
         ina.change_pointer_mem_address(shunt_voltage_address)
         ina.get_power()
-        print(ina.power)
+        print(list(ina.power))
         # if passed_rnd_1:
         #     prev_data = rewrite_display(ina.voltage,ina.current,ina.power,prev_data)
         # else:
