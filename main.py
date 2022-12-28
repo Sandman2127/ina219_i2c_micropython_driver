@@ -45,7 +45,7 @@ def convert_power_byte(byte_data):
     return byte_data
 
 def return_bytearray_of_address(int_address):
-    return bytearray(bytes.fromhex('0' + str(int_address)))
+    return bytearray(bytes.fromhex('0' + str(int_address))) # takes 2 --> '02' --> b'\x02'
 
 """
                     *** MAIN ***
@@ -190,6 +190,7 @@ else:
 voltage_display = True
 current_display = False
 power_display = False
+shunt_display = False
 while True:
     ### for the micropython  ### 
     # print("Bus Voltage: %.3f V" % ina.voltage())
