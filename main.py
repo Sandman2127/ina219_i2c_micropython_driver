@@ -1,21 +1,22 @@
 # use micropython
 
+import random
 import time
 import machine
 import ssd1306
-#from ina219 import INA219  # micropython version: https://github.com/chrisb2/pyb_ina219
+from ina219 import INA219  # micropython version: https://github.com/chrisb2/pyb_ina219
 
 # general i2c stuff 
 # print('Scan i2c bus...')
-# devices = i2c.scan()
+#devices = i2c.scan()
 
-# if len(devices) == 0:
-# print("No i2c device !")
-# else:
-# print('i2c devices found:',len(devices))
+#if len(devices) == 0:
+#    print("No i2c device !")
+#else:
+#    print('i2c devices found:',len(devices))
 
 # for device in devices:
-# print("Decimal address: ",device," | Hexa address: ",hex(device))
+#print("Decimal address: ",device," | Hexa address: ",hex(device))
 #
 
 # perform setup of globals
@@ -26,9 +27,9 @@ i2c_screen = machine.I2C(0,sda=sda_screen,scl=scl_screen,freq=400000)
 display = ssd1306.SSD1306_I2C(128, 64, i2c_screen)
 
 # ina219
-sda_sensor = machine.Pin(16)
-scl_sensor = machine.Pin(17)
-i2c_sensor = machine.I2C(1,sda=sda_sensor,scl=scl_sensor,freq=400000)
+sda_sensor = machine.Pin(0)
+scl_sensor = machine.Pin(1)
+i2c_sensor = machine.I2C(0,sda=sda_sensor,scl=scl_sensor,freq=400000)
 
 def rewrite_display(voltage,current,power,prev_data):
     #https://docs.micropython.org/en/latest/esp8266/tutorial/ssd1306.html
@@ -54,7 +55,7 @@ def write_display_nonchanging_sections():
     display.show()
 
 ### for debug only
-# class INA219:
+#class INA219:
 #     def __init__(self):
 #         self.voltage = 0.100
 #         self.current = 0.219
@@ -67,16 +68,16 @@ def write_display_nonchanging_sections():
 #     def fluctuate_current(self,input):
 #         self.current = self.current + input
 #         self.power = self.voltage * self.current
-# ina = INA219()
-# randomlist = []
-# for i in range(0,1000):
+#ina = INA219()
+#randomlist = []
+#for i in range(0,1000):
 #     n = random.randint(-1,1)
 #     randomlist.append(n)
 
 # setup ina219 
 SHUNT_OHMS = 0.1  # Check value of shunt used with your INA219
 ina = INA219(SHUNT_OHMS,i2c_sensor)
-I2C_INTERFACE_NO = 2
+I2C_INTERFACE_NO = 0
 ina = INA219(SHUNT_OHMS,I2C(I2C_INTERFACE_NO))
 ina.configure()
 # write displays never changing functions 
