@@ -11,6 +11,7 @@ shunt_voltage_address = 1 #'01'
 voltage_address = 2 #'02'  # hex(2) == '0x2'
 current_address = 3 #'03'
 power_address = 4 #'04'
+voltage_resolution = 0.004 # 4 mv
                             
 def rewrite_display(voltage,current,power,prev_data):
     #https://docs.micropython.org/en/latest/esp8266/tutorial/ssd1306.html
@@ -35,8 +36,11 @@ def write_display_nonchanging_sections():
     display.text('Current:', 5, 48, 1)
     display.show()
     
-def convert_v_byte(byte_data):
-    return byte_data
+def convert_v_byte(byte_list):
+    first,second = byte_list[0],byte_list[1]
+    # shift left 5 to clear the first byte and right 3 to remove irrelevant data
+    output_voltage = int(bin(first << 5 | second >> 3 ),2) * voltage_resolution
+    return output_voltage
 
 def convert_i_byte(byte_data):
     return byte_data
