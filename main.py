@@ -4,7 +4,8 @@ from random import randint
 import time
 from machine import I2C,Pin
 import ssd1306
-from micropython import const,trunc
+from micropython import const
+from math import trunc
 
 config_address = 0 #'00'
 shunt_voltage_address = 1 #'01'
@@ -12,10 +13,11 @@ voltage_address = 2 #'02'  # hex(2) == '0x2'
 current_address = 3 #'03'
 power_address = 4 #'04'
 calibration_address = 5 #'05'
-voltage_resolution = 0.004 # 4 mv
-current_lsb = 2.0/(2**15)  # 2 amps max yields 0.000061035 A or 610uA resolution
+mv_voltage_bus_resolution = 4 # 4 mv
+max_expected_amperage = 2.000 # 2 amps
+current_lsb = max_expected_amperage/(2**15)  # 2 amps max yields 0.000061035 A or 610uA resolution
 shunt_resistance = 0.1 # ohms
-calibration_val = trunc((0.04096/(current_lsb * shunt_resistance))) # == 6710 max value
+calibration_val = trunc((0.04096/(current_lsb * shunt_resistance))) # == 6710 max expected value used for calibration
                             
 def rewrite_display(voltage,current,power,prev_data):
     #https://docs.micropython.org/en/latest/esp8266/tutorial/ssd1306.html
@@ -40,22 +42,30 @@ def write_display_nonchanging_sections():
     display.text('Current:', 5, 48, 1)
     display.show()
     
-def convert_v_byte(byte_list):
-    first,second = byte_list[0],byte_list[1]
-    # shift left 5 to clear the first byte and right 3 to remove irrelevant data
-    output_voltage = int(bin(first << 5 | second >> 3 ),2) * voltage_resolution
-    return output_voltage
 
-def convert_i_byte(byte_data):
-    return byte_data
+def number_to_bytearray(number):
+    if number > 255 :
+        n_hex = hex(number).replace('0x','') # hex string like '0x1a36' --> split to --> '1a36'
+        n_hex_byte1 = n_hex[:2]           # hex string like '1a36' --> split to --> '1a'
+        n_hex_byte2 = n_hex[2:]           # hex string like '1a36' --> split to --> '36'
+        #print(n_hex_byte1,n_hex_byte2)
+        print([int(n_hex_byte1,16) << 8,int(n_hex_byte2,16)])
+        bytearray_out = bytearray([int(n_hex_byte1,16) << 8,int(n_hex_byte2,16)])
+    else:
+        n_hex = hex(number).replace('0x','') # hex string like '0x2' --> split to --> '2'
+        bytearray_out = bytearray.fromhex(n_hex)
+    return bytearray_out 
 
-def convert_power_byte(byte_data):
-    return byte_data
+def bytearray_of_register_address(int_address): 
+        return bytearray.fromhex('0' + str(int_address))
 
-def return_bytearray_of_address(int_address):
-    return bytearray.fromhex('0' + str(int_address))
-
-    #return bytearray(bytes.fromhex('0' + str(int_address))) # takes 2 --> '02' --> b'\x02'
+def reverse_num(num):
+    reversed_num = 0
+    while num != 0:
+        digit = num % 10
+        reversed_num = reversed_num * 10 + digit
+        num //= 10
+    return reversed_num
 
 """
                     *** MAIN ***
@@ -102,38 +112,59 @@ else:
             self.peripheral_address = address_in
             print("Peripheral address:",self.peripheral_address)
             print("Config address:",config_address)
-            print("Calibration address:",calibration_address," binary:",bin(int('399',16)))
-            print("Calibration value:",calibration_val," binary:",bin(calibration_val))
             self.voltage = 0
             self.current = 0
             self.power = 0 
             # initiate communication with the device:
             # setup configuration, 0 is the config address
-            configuration_array = bytearray([0x399F])  # '00111001 10011111' == 14751 >>> int('39',16) << 8 | int('9F',16) 
+            configuration_array = bytearray.fromhex('399F')  # '00111001 10011111' == 14751 >>> int('39',16) << 8 | int('9F',16)  == bytearray
             #configuration_array = bytearray.fromhex('399F')
             i2c_sensor.writeto_mem(self.peripheral_address,config_address,configuration_array)
             # setup current calibration, 5 is the calibration address
-            # calibration value: 6710 --> hex: '0x1a36' --> '1a36' --> bytes array: # not working bytearray(b'\x1a6') --> list(calibration_array) --> [24,26] --> >>> 24 << 8 | 26 == 6710
-            calibration_array = bytearray.fromhex((hex(calibration_val).split('x')[1]))
-            i2c_sensor.writeto_mem(self.peripheral_address,calibration_address,calibration_array)
-            
+            # calibration value: 6710 --> hex: '0x1a36' --> '1a36' --> bytes array: bytearray(b'\x1a6') --> list(calibration_array) --> [24,26] --> >>> 24 << 8 | 26 == 6710
+            calibration_array = number_to_bytearray(calibration_val)
+            print("Calibration address:",calibration_address)
+            print("Calibration value:",calibration_val,"\nCalibration value binary:",bin(calibration_val),"\nCalibration bytarray:",calibration_array)
+            i2c_sensor.writeto_mem(self.peripheral_address,calibration_address,calibration_array) 
+        
         def change_pointer_mem_address(self,mem_address):
             #print("changing pointer mem_address to:",mem_address)
             #print("mem address as a byte array:",return_bytearray_of_address(mem_address))
-            i2c_sensor.writeto(self.peripheral_address,return_bytearray_of_address(mem_address)) 
+            i2c_sensor.writeto(self.peripheral_address,bytearray_of_register_address(mem_address))
+            
+        def convert_measured_bytes(self,byte1_int,byte2_int,measurment_type):
+            if measurment_type == 'voltage':
+                # shift left 5 to clear the first byte and right 3 to remove irrelevant data
+                output_voltage = int(byte1_int << 5 | byte2_int >> 3) * mv_voltage_bus_resolution
+                # complement it:
+                #output_voltage = reverse_num(output_voltage)
+                return output_voltage
+            elif measurment_type == 'current':
+                # shift left 8 to clear the first byte and right 3 to remove irrelevant data
+                # Current Register = Shunt Voltage Register * Calibration Register / 4096
+                output_current = int((byte1_int << 8 | byte2_int) >> 1) * calibration_val / 4096
+                return output_current
+            elif measurment_type == "power":
+                output_power = int(byte1_int << 8 | byte2_int) * mv_voltage_bus_resolution
+                return output_power 
 
         def get_voltage(self):
-            voltage_byte = i2c_sensor.readfrom_mem(self.peripheral_address,voltage_address,2) # read 2 bytes from the voltage mem address from the peripheral device
-            self.voltage = convert_v_byte(voltage_byte)
-            time.sleep_ms(1)
+            voltage_bytes = i2c_sensor.readfrom_mem(self.peripheral_address,voltage_address,2) # read 2 bytes from the voltage mem address from the peripheral device
+            
+            vbyte1_int,vbyte2_int = list(voltage_bytes)[0],list(voltage_bytes)[1]
+            print("vbytes:",voltage_bytes,"\nvbyte1:",vbyte1_int,"\nvbyte2:",vbyte2_int)
+            self.voltage = ina.convert_measured_bytes(vbyte1_int,vbyte2_int,'voltage')
+            time.sleep_ms(10)
         def get_current(self):
-            current_byte = i2c_sensor.readfrom_mem(self.peripheral_address,current_address,2) # read 2 bytes from the current mem address from the peripheral device
-            self.current = convert_i_byte(current_byte)
-            time.sleep_ms(1)
+            current_bytes = list(i2c_sensor.readfrom_mem(self.peripheral_address,current_address,2)) # read 2 bytes from the current mem address from the peripheral device
+            cbyte1_int,cbyte2_int = current_bytes[0],current_bytes[1]
+            self.current = ina.convert_measured_bytes(cbyte1_int,cbyte2_int,'current')
+            time.sleep_ms(10)
         def get_power(self):
-            power_byte = i2c_sensor.readfrom_mem(self.peripheral_address,power_address,2)  # read 2 bytes from the current mem address from the peripheral device
-            self.power = convert_power_byte(power_byte)
-            time.sleep_ms(1)
+            power_bytes = list(i2c_sensor.readfrom_mem(self.peripheral_address,power_address,2))  # read 2 bytes from the power mem address from the peripheral device
+            pbyte1_int,pbyte2_int = power_bytes[0],power_bytes[1]
+            self.power = ina.convert_measured_bytes(pbyte1_int,pbyte2_int,'power')
+            time.sleep_ms(10)
         """
             ina219 specific data:
             0x399F = 00111001 10011111
@@ -173,7 +204,8 @@ else:
             I2C.readfrom_mem_into(addr, memaddr, buf, *, addrsize=8)
                 
             Read into buf from the peripheral specified by addr starting from the memory address specified by memaddr.
-            The number of bytes read is the length of buf. The argument addrsize specifies the address size in bits (on ESP8266 this argument is not recognised and the address size is always 8 bits).
+            The number of bytes read is the length of buf. The argument addrsize specifies the address size in bits (on ESP8266 this argument is not
+            recognised and the address size is always 8 bits).
 
             The method returns None.
 
@@ -190,10 +222,10 @@ else:
     ina = INA219(devices[1]) # should be 2nd i2c device i.e. the ina219
     
 # write displays never changing functions 
-write_display_nonchanging_sections()
+#write_display_nonchanging_sections()
 # measure and display loop
-run_loop = 1
-passed_rnd_1 = False
+#run_loop = 1
+#passed_rnd_1 = False
 
 
 if len(devices) == 0:
@@ -210,62 +242,22 @@ current_display = False
 power_display = False
 shunt_display = False
 while True:
-    ### for the micropython  ### 
-    # print("Bus Voltage: %.3f V" % ina.voltage())
-    # print("Current: %.3f mA" % ina.current())
-    # print("Power: %.3f mW" % ina.power())
-
-    # Check internal calculations haven't overflowed (doesn't detect ADC overflows)
-    # if not ina.voltage:
-    #     print("Internal Overflow Detected!")
-    #     print("")
     if voltage_display:
         ina.change_pointer_mem_address(voltage_address)
         ina.get_voltage()
-        print(list(ina.voltage))
+        print(ina.voltage)
+        print()
     elif current_display:
         ina.change_pointer_mem_address(current_address)
         ina.get_current()
-        print(list(ina.current))
+        print(ina.current)
     elif power_display:
         ina.change_pointer_mem_address(power_address)
         ina.get_power()
-        print(list(ina.power))
+        print(ina.power)
     elif shunt_display:
         ina.change_pointer_mem_address(shunt_voltage_address)
         ina.get_power()
-        print(list(ina.power))
-        # if passed_rnd_1:
-        #     prev_data = rewrite_display(ina.voltage,ina.current,ina.power,prev_data)
-        # else:
-        #     prev_data = rewrite_display(ina.voltage,ina.current,ina.power,[0,0,0])
-        #     passed_rnd_1 = True
-        time.sleep_ms(1000)
+        print(ina.power)
+        
     time.sleep_ms(1000)
-
-
-# circuit python version
-# sudo pip3 install adafruit-circuitpython-ina219
-# import board
-# import busio 
-# import adafruit_ina219  
-
-# i2c_bus = board.I2C()  # uses board.SCL and board.SDA
-# i2c_bus = board.STEMMA_I2C()  # For using the built-in STEMMA QT connector on a microcontroller
-
-# ina219 = adafruit_ina219.INA219(i2c)
-# print("ina219 test")
-# display some of the advanced field (just to test)
-# print("Config register:")
-# print("  bus_voltage_range:    0x%1X" % ina219.bus_voltage_range)
-# print("  gain:                 0x%1X" % ina219.gain)
-# print("  bus_adc_resolution:   0x%1X" % ina219.bus_adc_resolution)
-# print("  shunt_adc_resolution: 0x%1X" % ina219.shunt_adc_resolution)
-# print("  mode:                 0x%1X" % ina219.mode)
-# print("")
-
-# optional : change configuration to use 32 samples averaging for both bus voltage and shunt voltage
-# ina219.bus_adc_resolution = ADCResolution.ADCRES_12BIT_32S
-# ina219.shunt_adc_resolution = ADCResolution.ADCRES_12BIT_32S
-# optional : change voltage range to 16V
-# ina219.bus_voltage_range = BusVoltageRange.RANGE_16V
