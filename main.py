@@ -4,14 +4,18 @@ from random import randint
 import time
 from machine import I2C,Pin
 import ssd1306
-from micropython import const
+from micropython import const,trunc
 
 config_address = 0 #'00'
 shunt_voltage_address = 1 #'01'
 voltage_address = 2 #'02'  # hex(2) == '0x2'
 current_address = 3 #'03'
 power_address = 4 #'04'
+calibration_address = 5 #'05'
 voltage_resolution = 0.004 # 4 mv
+current_lsb = 2.0/(2**15)  # 2 amps max yields 0.000061035 A or 610uA resolution
+shunt_resistance = 0.1 # ohms
+calibration_val = trunc((0.04096/(current_lsb * shunt_resistance))) # == 6710 max value
                             
 def rewrite_display(voltage,current,power,prev_data):
     #https://docs.micropython.org/en/latest/esp8266/tutorial/ssd1306.html
@@ -49,7 +53,9 @@ def convert_power_byte(byte_data):
     return byte_data
 
 def return_bytearray_of_address(int_address):
-    return bytearray(bytes.fromhex('0' + str(int_address))) # takes 2 --> '02' --> b'\x02'
+    return bytearray.fromhex('0' + str(int_address))
+
+    #return bytearray(bytes.fromhex('0' + str(int_address))) # takes 2 --> '02' --> b'\x02'
 
 """
                     *** MAIN ***
@@ -95,17 +101,25 @@ else:
         def __init__(self,address_in):
             self.peripheral_address = address_in
             print("Peripheral address:",self.peripheral_address)
+            print("Config address:",config_address)
+            print("Calibration address:",calibration_address," binary:",bin(int('399',16)))
+            print("Calibration value:",calibration_val," binary:",bin(calibration_val))
             self.voltage = 0
             self.current = 0
             self.power = 0 
-            # initiate communication with the device
-            startup_buffer = bytearray([0x399F])  # '00111001 10011111' 
-            # 0 is the configuration address 
-            i2c_sensor.writeto_mem(self.peripheral_address,config_address,startup_buffer)
+            # initiate communication with the device:
+            # setup configuration, 0 is the config address
+            configuration_array = bytearray([0x399F])  # '00111001 10011111' == 14751 >>> int('39',16) << 8 | int('9F',16) 
+            #configuration_array = bytearray.fromhex('399F')
+            i2c_sensor.writeto_mem(self.peripheral_address,config_address,configuration_array)
+            # setup current calibration, 5 is the calibration address
+            # calibration value: 6710 --> hex: '0x1a36' --> '1a36' --> bytes array: # not working bytearray(b'\x1a6') --> list(calibration_array) --> [24,26] --> >>> 24 << 8 | 26 == 6710
+            calibration_array = bytearray.fromhex((hex(calibration_val).split('x')[1]))
+            i2c_sensor.writeto_mem(self.peripheral_address,calibration_address,calibration_array)
             
         def change_pointer_mem_address(self,mem_address):
-            print("changing pointer mem_address to:",mem_address)
-            print("mem address as a byte array:",return_bytearray_of_address(mem_address))
+            #print("changing pointer mem_address to:",mem_address)
+            #print("mem address as a byte array:",return_bytearray_of_address(mem_address))
             i2c_sensor.writeto(self.peripheral_address,return_bytearray_of_address(mem_address)) 
 
         def get_voltage(self):
