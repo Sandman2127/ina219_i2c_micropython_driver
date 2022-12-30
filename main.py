@@ -44,28 +44,21 @@ def write_display_nonchanging_sections():
     
 
 def number_to_bytearray(number):
-    if number > 255 :
-        n_hex = hex(number).replace('0x','') # hex string like '0x1a36' --> split to --> '1a36'
-        n_hex_byte1 = n_hex[:2]           # hex string like '1a36' --> split to --> '1a'
-        n_hex_byte2 = n_hex[2:]           # hex string like '1a36' --> split to --> '36'
+    #if number > 255 :
+    #    n_hex = hex(number).replace('0x','') # hex string like '0x1a36' --> split to --> '1a36'
+    #    n_hex_byte1 = n_hex[:2]           # hex string like '1a36' --> split to --> '1a'
+    #    n_hex_byte2 = n_hex[2:]           # hex string like '1a36' --> split to --> '36'
         #print(n_hex_byte1,n_hex_byte2)
-        print([int(n_hex_byte1,16) << 8,int(n_hex_byte2,16)])
-        bytearray_out = bytearray([int(n_hex_byte1,16) << 8,int(n_hex_byte2,16)])
-    else:
-        n_hex = hex(number).replace('0x','') # hex string like '0x2' --> split to --> '2'
-        bytearray_out = bytearray.fromhex(n_hex)
+    #    print([int(n_hex_byte1,16) << 8,int(n_hex_byte2,16)])
+    #    bytearray_out = bytearray([int(n_hex_byte1,16) << 8,int(n_hex_byte2,16)])
+    #else:
+    n_hex = hex(number).replace('0x','') # hex string like '0x2' --> split to --> '2'
+    bytearray_out = bytearray.fromhex(n_hex)
+    
     return bytearray_out 
 
 def bytearray_of_register_address(int_address): 
         return bytearray.fromhex('0' + str(int_address))
-
-def reverse_num(num):
-    reversed_num = 0
-    while num != 0:
-        digit = num % 10
-        reversed_num = reversed_num * 10 + digit
-        num //= 10
-    return reversed_num
 
 """
                     *** MAIN ***
@@ -117,7 +110,7 @@ else:
             self.power = 0 
             # initiate communication with the device:
             # setup configuration, 0 is the config address
-            configuration_array = bytearray.fromhex('399F')  # '00111001 10011111' == 14751 >>> int('39',16) << 8 | int('9F',16)  == bytearray
+            configuration_array = bytearray.fromhex('399F')  # '00111001 10011111' == 14751 >>> ba = bytearray.fromhex('399F') # ba[0] << 8 | ba[1] == 14751 
             #configuration_array = bytearray.fromhex('399F')
             i2c_sensor.writeto_mem(self.peripheral_address,config_address,configuration_array)
             # setup current calibration, 5 is the calibration address
@@ -135,14 +128,13 @@ else:
         def convert_measured_bytes(self,byte1_int,byte2_int,measurment_type):
             if measurment_type == 'voltage':
                 # shift left 5 to clear the first byte and right 3 to remove irrelevant data
-                output_voltage = int(byte1_int << 5 | byte2_int >> 3) * mv_voltage_bus_resolution
-                # complement it:
-                #output_voltage = reverse_num(output_voltage)
+                output_voltage = (int(byte1_int << 5 | byte2_int >> 3) * mv_voltage_bus_resolution)/1000
                 return output_voltage
             elif measurment_type == 'current':
-                # shift left 8 to clear the first byte and right 3 to remove irrelevant data
+                # shift left 8 to clear the first byte and right 1 to remove sign data
                 # Current Register = Shunt Voltage Register * Calibration Register / 4096
-                output_current = int((byte1_int << 8 | byte2_int) >> 1) * calibration_val / 4096
+                # output_current = ((byte1_int << 8 | byte2_int) >> 1) * calibration_val / 4096
+                output_current = (0.3421655 * ((byte1_int << 8 | byte2_int) >> 1) * current_lsb)**0.5355997
                 return output_current
             elif measurment_type == "power":
                 output_power = int(byte1_int << 8 | byte2_int) * mv_voltage_bus_resolution
@@ -150,20 +142,21 @@ else:
 
         def get_voltage(self):
             voltage_bytes = i2c_sensor.readfrom_mem(self.peripheral_address,voltage_address,2) # read 2 bytes from the voltage mem address from the peripheral device
-            
             vbyte1_int,vbyte2_int = list(voltage_bytes)[0],list(voltage_bytes)[1]
-            print("vbytes:",voltage_bytes,"\nvbyte1:",vbyte1_int,"\nvbyte2:",vbyte2_int)
-            self.voltage = ina.convert_measured_bytes(vbyte1_int,vbyte2_int,'voltage')
+            #print("vbytes:",voltage_bytes,"\nvbyte1:",vbyte1_int,"\nvbyte2:",vbyte2_int)
+            self.voltage = self.convert_measured_bytes(vbyte1_int,vbyte2_int,'voltage')
             time.sleep_ms(10)
         def get_current(self):
-            current_bytes = list(i2c_sensor.readfrom_mem(self.peripheral_address,current_address,2)) # read 2 bytes from the current mem address from the peripheral device
+            #current_bytes = list(i2c_sensor.readfrom_mem(self.peripheral_address,shunt_voltage_address,2)) # read 2 bytes from the current mem address from the peripheral device
+            current_bytes = list(i2c_sensor.readfrom_mem(self.peripheral_address,current_address,2))
             cbyte1_int,cbyte2_int = current_bytes[0],current_bytes[1]
-            self.current = ina.convert_measured_bytes(cbyte1_int,cbyte2_int,'current')
+            print("cbytes:",current_bytes,"\ncbyte1:",cbyte1_int,"\ncbyte2:",cbyte2_int)
+            self.current = self.convert_measured_bytes(cbyte1_int,cbyte2_int,'current')
             time.sleep_ms(10)
         def get_power(self):
             power_bytes = list(i2c_sensor.readfrom_mem(self.peripheral_address,power_address,2))  # read 2 bytes from the power mem address from the peripheral device
             pbyte1_int,pbyte2_int = power_bytes[0],power_bytes[1]
-            self.power = ina.convert_measured_bytes(pbyte1_int,pbyte2_int,'power')
+            self.power = self.convert_measured_bytes(pbyte1_int,pbyte2_int,'power')
             time.sleep_ms(10)
         """
             ina219 specific data:
@@ -222,7 +215,7 @@ else:
     ina = INA219(devices[1]) # should be 2nd i2c device i.e. the ina219
     
 # write displays never changing functions 
-#write_display_nonchanging_sections()
+write_display_nonchanging_sections()
 # measure and display loop
 #run_loop = 1
 #passed_rnd_1 = False
@@ -237,8 +230,8 @@ else:
          print("device:",cnt,dev,hex(dev))
          cnt += 1
 
-voltage_display = True
-current_display = False
+voltage_display = False
+current_display = True
 power_display = False
 shunt_display = False
 while True:
@@ -248,16 +241,20 @@ while True:
         print(ina.voltage)
         print()
     elif current_display:
+        #ina.change_pointer_mem_address(shunt_voltage_address)
         ina.change_pointer_mem_address(current_address)
         ina.get_current()
         print(ina.current)
+        print()
     elif power_display:
         ina.change_pointer_mem_address(power_address)
         ina.get_power()
         print(ina.power)
+        print()
     elif shunt_display:
         ina.change_pointer_mem_address(shunt_voltage_address)
         ina.get_power()
         print(ina.power)
+        print()
         
     time.sleep_ms(1000)
