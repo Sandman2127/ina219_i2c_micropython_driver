@@ -19,13 +19,13 @@ current_lsb = max_expected_amperage/(2**15)  # 2 amps max yields 0.000061035 A o
 shunt_resistance = 0.1 # ohms
 calibration_val = trunc((0.04096/(current_lsb * shunt_resistance))) # == 6710 max expected value used for calibration
                             
-def rewrite_display(voltage,current,power,prev_data):
-    #https://docs.micropython.org/en/latest/esp8266/tutorial/ssd1306.html
+def rewrite_display(voltage,current,power):
+    # https://docs.micropython.org/en/latest/esp8266/tutorial/ssd1306.html
     # overwrite the old stuff
-    prev_power,prev_voltage,prev_current = prev_data[0],prev_data[1],prev_data[2]
-    display.text(str(round(prev_power,4)),70,0,0)
-    display.text(str(round(prev_voltage,4)),70,24,0)
-    display.text(str(round(prev_current,4)),70,48,0)
+    #display.fill_rect(x,y,w,h,c):
+    display.fill_rect(70, 0, 58, 12, 0)
+    display.fill_rect(70, 24, 58, 12, 0)
+    display.fill_rect(70, 48, 58, 12, 0)
     # write the new stuff
     display.text(str(round(power,4)),70,0,1)
     display.text(str(round(voltage,4)),70,24,1)
@@ -42,6 +42,7 @@ def write_display_nonchanging_sections():
     display.text('Current:', 5, 48, 1)
     display.show()
     
+
 
 def number_to_bytearray(number):
     #if number > 255 :
@@ -134,6 +135,7 @@ else:
                 # shift left 8 to clear the first byte and right 1 to remove sign data
                 # Current Register = Shunt Voltage Register * Calibration Register / 4096
                 # output_current = ((byte1_int << 8 | byte2_int) >> 1) * calibration_val / 4096
+                # empirically determined scaling from the function output_current = 0.3421655(returned_2_byte_value * current_lsb )^ 0.5355997
                 output_current = (0.3421655 * ((byte1_int << 8 | byte2_int) >> 1) * current_lsb)**0.5355997
                 return output_current
             elif measurment_type == "power":
@@ -216,11 +218,8 @@ else:
     
 # write displays never changing functions 
 write_display_nonchanging_sections()
+
 # measure and display loop
-#run_loop = 1
-#passed_rnd_1 = False
-
-
 if len(devices) == 0:
      print("No i2c device !")
 else:
@@ -230,31 +229,64 @@ else:
          print("device:",cnt,dev,hex(dev))
          cnt += 1
 
-voltage_display = False
-current_display = True
-power_display = False
-shunt_display = False
+# set button pin to 16 and set internal pulldown
+button = Pin(16, Pin.IN, Pin.PULL_DOWN)
+
+display_mode = 0 # 0,1,2,3  > 3  --> reset to 0
+# display_mode = 0 voltage
+# display_mode = 1 current
+# display_mode = 2 power
+# display_mode = 3 shunt
+
+# change pointer mem address based on prev_mode
+prev_mode = 99
 while True:
-    if voltage_display:
-        ina.change_pointer_mem_address(voltage_address)
+    # setup display modes
+    if button.value() == 1:
+        display_mode += 1
+        if display_mode > 2:
+            display_mode = 0
+    # voltage
+    if display_mode == 0:
+        if prev_mode == 0:
+            pass
+        else:
+            ina.change_pointer_mem_address(voltage_address)
         ina.get_voltage()
-        print(ina.voltage)
-        print()
-    elif current_display:
-        #ina.change_pointer_mem_address(shunt_voltage_address)
-        ina.change_pointer_mem_address(current_address)
+        rewrite_display(ina.voltage,0,0)
+        prev_mode = 0
+        #print(ina.voltage)
+        #print()
+
+    # current
+    elif display_mode == 1:
+        if prev_mode == 1:
+            pass
+        else:
+            ina.change_pointer_mem_address(current_address)
+            #ina.change_pointer_mem_address(shunt_voltage_address)
         ina.get_current()
-        print(ina.current)
-        print()
-    elif power_display:
-        ina.change_pointer_mem_address(power_address)
+        rewrite_display(0,ina.current,0)
+        prev_mode = 1
+        #print(ina.current)
+        #print()
+    
+    # power
+    elif display_mode == 2:
+        if prev_mode == 2:
+            pass
+        else:
+            ina.change_pointer_mem_address(power_address)
         ina.get_power()
-        print(ina.power)
-        print()
-    elif shunt_display:
+        rewrite_display(0,0,ina.power)
+        prev_mode = 2
+        #print(ina.power)
+        #print()
+
+    # shunt voltage
+    else:
         ina.change_pointer_mem_address(shunt_voltage_address)
         ina.get_power()
-        print(ina.power)
-        print()
-        
-    time.sleep_ms(1000)
+        #print(ina.power)
+        #print()
+    time.sleep_ms(75)
