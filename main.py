@@ -7,6 +7,9 @@ from micropython import const
 from math import trunc
 from INA219 import INA219
 
+# set button pin to 16 and set internal pulldown
+button_pin = const(16)
+button = Pin(button_pin, Pin.IN, Pin.PULL_DOWN)
 # calibration of current
 mv_voltage_bus_resolution = const(4) # 4 mv
 max_expected_amperage = 2.000 # 2 amps
@@ -42,12 +45,24 @@ def write_display_nonchanging_sections():
     display.text('Current:', 5, 48, 1)
     display.show()
 
+def check_display_mode(prev_mode,present_run_mode):
+    # used to change the pointer mem address of the ina219 to collect the correct measurement
+    if prev_mode == present_run_mode:
+        pass
+    elif present_run_mode == 0 or present_run_mode == 99 :
+        ina.change_pointer_mem_address(ina.voltage_address)
+    elif present_run_mode == 1:
+        ina.change_pointer_mem_address(ina.current_address)
+    elif present_run_mode == 2:
+        ina.change_pointer_mem_address(ina.power_address)
+    else:
+        print("error in check_change_modes() function")
+
 """
                     *** MAIN ***
 """
 
 # define setup variables
-debug = 0 
 # perform setup of globals
 # screen
 sda_screen = machine.Pin(0)
@@ -80,8 +95,6 @@ else:
          print("device:",cnt,dev,hex(dev))
          cnt += 1
 
-# set button pin to 16 and set internal pulldown
-button = Pin(16, Pin.IN, Pin.PULL_DOWN)
 
 display_mode = 0 # 0,1,2,3  > 3  --> reset to 0
 # display_mode = 0 voltage
@@ -92,17 +105,16 @@ display_mode = 0 # 0,1,2,3  > 3  --> reset to 0
 # change pointer mem address based on prev_mode
 prev_mode = 99
 while True:
-    # setup display modes
+    # setup display modes if button goes high
     if button.value() == 1:
         display_mode += 1
         if display_mode > 2:
             display_mode = 0
+
+    check_display_mode(prev_mode,display_mode)
+    
     # voltage
     if display_mode == 0:
-        if prev_mode == 0:
-            pass
-        else:
-            ina.change_pointer_mem_address(ina.voltage_address)
         ina.get_voltage()
         rewrite_display(ina.voltage,0,0)
         prev_mode = 0
@@ -111,11 +123,6 @@ while True:
 
     # current
     elif display_mode == 1:
-        if prev_mode == 1:
-            pass
-        else:
-            ina.change_pointer_mem_address(ina.current_address)
-            #ina.change_pointer_mem_address(shunt_voltage_address)
         ina.get_current()
         rewrite_display(0,ina.current,0)
         prev_mode = 1
@@ -124,20 +131,16 @@ while True:
     
     # power
     elif display_mode == 2:
-        if prev_mode == 2:
-            pass
-        else:
-            ina.change_pointer_mem_address(ina.power_address)
         ina.get_power()
         rewrite_display(0,0,ina.power)
         prev_mode = 2
         #print(ina.power)
         #print()
-
     # shunt voltage
     else:
-        ina.change_pointer_mem_address(shunt_voltage_address)
-        ina.get_power()
+        pass
+        #ina.change_pointer_mem_address(ina.shunt_voltage_address)
+        #ina.get_power()
         #print(ina.power)
-        #print()
+    
     time.sleep_ms(75)
