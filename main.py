@@ -6,6 +6,8 @@ import ssd1306
 from micropython import const
 from math import trunc
 from INA219 import INA219
+import displayed
+from fonts import bookerly_12,bookerly_15,ubuntu_condensed_12
 
 # set button pin to 16 and set internal pulldown
 button_pin = const(16)
@@ -58,22 +60,26 @@ def check_display_mode(prev_mode,present_run_mode):
     else:
         print("error in check_change_modes() function")
 
+
 """
                     *** MAIN ***
 """
 
 # define setup variables
-# perform setup of globals
+orig_display = True
 # screen
-sda_screen = machine.Pin(0)
-scl_screen = machine.Pin(1)
-i2c_screen = I2C(0,sda=sda_screen,scl=scl_screen,freq=400000)
-display = ssd1306.SSD1306_I2C(128, 64, i2c_screen)
+_sda = machine.Pin(0)
+_scl = machine.Pin(1)
+i2c_screen = I2C(0,sda=_sda,scl=_scl,freq=400000)
+if orig_display:
+    display = ssd1306.SSD1306_I2C(128, 64, i2c_screen)
+    # write displays never changing functions 
+    write_display_nonchanging_sections()
+else: 
+    dsp = displayed.SSD1306_12C(128, 32, i2c_screen)
 
 # ina219
-sda_sensor = machine.Pin(0)
-scl_sensor = machine.Pin(1)
-i2c_sensor = machine.I2C(0,sda=sda_sensor,scl=scl_sensor,freq=400000)    
+i2c_sensor = machine.I2C(0,sda=_sda,scl=_scl,freq=400000)    
 devices = i2c_screen.scan()
 
 # devices[1] == 64 is my i2c ina219
@@ -81,18 +87,15 @@ ina219_sensor_address = devices[1]
         
 # setup ina219(i2c_sensor_interface <object> ,sensor_address <int>, current_lsb <float> , mv_voltage_bus_resolution <int>, corrected_calibration_val <int>)
 ina = INA219(i2c_sensor,ina219_sensor_address,current_lsb,mv_voltage_bus_resolution,corrected_calibration_val) 
-    
-# write displays never changing functions 
-write_display_nonchanging_sections()
 
 # measure and display loop
 if len(devices) == 0:
      print("No i2c device !")
 else:
-     print('found:',len(devices),'i2c devices')
+     print('Found:',len(devices),'i2c devices')
      cnt = 0
      for dev in devices:
-         print("device:",cnt,dev,hex(dev))
+         print("Device:",cnt,dev,hex(dev))
          cnt += 1
 
 
@@ -104,19 +107,32 @@ display_mode = 0 # 0,1,2,3  > 3  --> reset to 0
 
 # change pointer mem address based on prev_mode
 prev_mode = 99
+
+# draw data on screen
+# mux.select_channel(0)
+# mux.device.fill(0)
+# mux.device.rect(85, 10, 32, 18, 1, False)
+# mux.device.fw_text("inside", ubuntu_condensed_12, 89, 12)
+# mux.device.text("T", 5, 8)
+# mux.device.text(":", 21, 8)
+
+
 while True:
     # setup display modes if button goes high
     if button.value() == 1:
         display_mode += 1
         if display_mode > 2:
             display_mode = 0
-
+    # change memory pointer address to retrive correct measurement for voltage, current, power or shunt on display
     check_display_mode(prev_mode,display_mode)
     
     # voltage
     if display_mode == 0:
         ina.get_voltage()
-        rewrite_display(ina.voltage,0,0)
+        if orig_display:
+            rewrite_display(ina.voltage,0,0)
+        else:
+            pass
         prev_mode = 0
         #print(ina.voltage)
         #print()
@@ -124,7 +140,10 @@ while True:
     # current
     elif display_mode == 1:
         ina.get_current()
-        rewrite_display(0,ina.current,0)
+        if orig_display:
+            rewrite_display(0,ina.current,0)
+        else:
+            pass
         prev_mode = 1
         #print(ina.current)
         #print()
@@ -132,7 +151,10 @@ while True:
     # power
     elif display_mode == 2:
         ina.get_power()
-        rewrite_display(0,0,ina.power)
+        if orig_display:
+            rewrite_display(0,0,ina.power)
+        else:
+            pass
         prev_mode = 2
         #print(ina.power)
         #print()
