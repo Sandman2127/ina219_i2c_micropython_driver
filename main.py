@@ -79,8 +79,8 @@ devices = i2c_screen.scan()
 # devices[1] == 64 is my i2c ina219
 ina219_sensor_address = devices[1]
         
-# setup ina219(i2c_sensor_interface,mv_voltage_bus_resolution
-ina = INA219(i2c_sensor,ina219_sensor_address,current_lsb,mv_voltage_bus_resolution,corrected_calibration_val) # 2nd i2c device in my case .e. the ina219
+# setup ina219(i2c_sensor_interface <object> ,sensor_address <int>, current_lsb <float> , mv_voltage_bus_resolution <int>, corrected_calibration_val <int>)
+ina = INA219(i2c_sensor,ina219_sensor_address,current_lsb,mv_voltage_bus_resolution,corrected_calibration_val) 
     
 # write displays never changing functions 
 write_display_nonchanging_sections()
