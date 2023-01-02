@@ -1,5 +1,6 @@
 from micropython import const
 from time import sleep_ms
+from math import e
 
 # INA219(devices[1],mv_voltage_bus_resolution,corrected_calibration_val)
 class INA219:
@@ -57,28 +58,23 @@ class INA219:
         #print("mem address as a byte array:",return_bytearray_of_address(mem_address))
         self.i2c_sensor.writeto(self.peripheral_address,self.bytearray_of_register_address(mem_address))
         
-    def convert_measured_bytes(self,byte1_int,byte2_int,measurment_type):
-        if measurment_type == 'voltage':
+    def convert_measured_bytes(self,byte1_int,byte2_int,measurement_type):
+        if measurement_type == 'voltage':
             # shift left 5 to clear the first byte and right 3 to remove irrelevant data
             output_voltage = (int(byte1_int << 5 | byte2_int >> 3) * self.mv_voltage_bus_resolution)/1000
             return output_voltage
-        elif measurment_type == 'current':
-            # shift left 8 to clear the first byte and right 1 to remove sign data
-            # Current Register = Shunt Voltage Register * Calibration Register / 4096
-            # output_current = ((byte1_int << 8 | byte2_int) >> 1) * calibration_val / 4096
-            # empirically determined function scaling from the function output_current = 0.3421655(returned_2_byte_value * current_lsb )^ 0.5355997
-            #output_current = (0.3421655 * ((byte1_int << 8 | byte2_int) >> 1) * current_lsb)**0.5355997
-            # hard wired
+        elif measurement_type == 'current':
+            # shift left 8 to clear the first byte and multiply by the current lsb
             detected_output_current = ((byte1_int << 8 | byte2_int)) * self.current_lsb
-            # scaling below 8 detected mA where the detected current is inaccurate
-            # equations below empirically determined using an Agilent U1271A as the current reference
+            # scaling below 8 detected mA where the detected current appears inaccurate
+            # equations below empirically determined using an Agilent U1271A as the current detection reference
             if detected_output_current < 0.008:
                 return 0.42757*detected_output_current**0.488257
             else:
                 return 0.052401*e**(4.3401*detected_output_current)
 
-            return output_current
-        elif measurment_type == "power":
+            #return detected_output_current
+        elif measurement_type == "power":
             output_power = int(byte1_int << 8 | byte2_int) * mv_voltage_bus_resolution
             return output_power 
 
