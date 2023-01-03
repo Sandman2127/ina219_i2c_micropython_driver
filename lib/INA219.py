@@ -13,9 +13,12 @@ class INA219:
         self.calibration_value = calibration_value
         
         # measured values
+        self.shunt_resistance = 0.1
+        self.PGA8_resolution = 0.00001 # 10 uV
         self.voltage = 0
         self.current = 0
         self.power = 0
+        self.shunt_voltage = 0
         
         # ina219 address constants
         self.config_address = const(0) #'00'
@@ -63,7 +66,7 @@ class INA219:
             # shift left 5 to clear the first byte and right 3 to remove irrelevant data
             output_voltage = (int(byte1_int << 5 | byte2_int >> 3) * self.mv_voltage_bus_resolution)/1000
             return output_voltage
-        elif measurement_type == 'current':
+        elif measurement_type == 'deprecated_current_method':
             # shift left 8 to clear the first byte and multiply by the current lsb
             detected_output_current = ((byte1_int << 8 | byte2_int) * self.current_lsb)
             # scaling below 8 detected mA where the detected current appears inaccurate
@@ -72,26 +75,43 @@ class INA219:
                 return 0.428*detected_output_current**0.488
             else:
                 return 0.052*e**(4.340*detected_output_current)
-
-            #return detected_output_current
-        elif measurement_type == "power":
+        elif measurement_type == 'power':
             output_power = int(byte1_int << 8 | byte2_int) * mv_voltage_bus_resolution
-            return output_power 
+            return output_power
+        elif measurement_type == 'shunt_voltage':
+            # shift left to clear the first byte
+            output_shunt_voltage = int(byte1_int << 8 | byte2_int)
+            return output_shunt_voltage 
 
     def get_voltage(self):
         voltage_bytes = self.i2c_sensor.readfrom_mem(self.peripheral_address,self.voltage_address,2) # read 2 bytes from the voltage mem address from the peripheral device
         vbyte1_int,vbyte2_int = list(voltage_bytes)[0],list(voltage_bytes)[1]
         self.voltage = self.convert_measured_bytes(vbyte1_int,vbyte2_int,'voltage')
-    def get_current(self):
+        
+    def deprecated_get_current(self):
         current_bytes = self.i2c_sensor.readfrom_mem(self.peripheral_address,self.current_address,2)
         cbyte1_int,cbyte2_int = list(current_bytes)[0],list(current_bytes)[1]
         #print("cbytes:",current_bytes,"\ncbyte1:",cbyte1_int,"\ncbyte2:",cbyte2_int)
-        self.current = self.convert_measured_bytes(cbyte1_int,cbyte2_int,'current')
+        self.current = self.convert_measured_bytes(cbyte1_int,cbyte2_int,'deprecated_current_method')
+        
     def get_power(self):
         self.get_voltage()
         self.get_current()
         # P = IV
         self.power = self.voltage * self.current
+        
+    def get_current(self):
+        shunt_voltage_bytes = self.i2c_sensor.readfrom_mem(self.peripheral_address,self.shunt_voltage_address,2)
+        sv_byte1_int,sv_byte2_int = list(shunt_voltage_bytes)[0],list(shunt_voltage_bytes)[1]
+        self.shunt_voltage = self.convert_measured_bytes(sv_byte1_int,sv_byte2_int,'shunt_voltage')
+        # LSB = 10 uV is the limit of resolution at PGA8
+        self.current = (self.shunt_voltage * self.PGA8_resolution) / self.shunt_resistance
+        
+    def get_shunt_voltage(self):
+        shunt_voltage_bytes = self.i2c_sensor.readfrom_mem(self.peripheral_address,self.shunt_voltage_address,2)
+        sv_byte1_int,sv_byte2_int = list(shunt_voltage_bytes)[0],list(shunt_voltage_bytes)[1]
+        self.shunt_voltage = self.convert_measured_bytes(sv_byte1_int,sv_byte2_int,'shunt_voltage') * self.PGA8_resolution
+        
     """
         ina219 specific data:
         0x399F = 00111001 10011111

@@ -14,7 +14,7 @@ button = Pin(button_pin, Pin.IN, Pin.PULL_DOWN)
 # calibration of current
 mv_voltage_bus_resolution = const(4) # 4 mv
 max_expected_amperage = 2.000 # 2 amps
-current_lsb = max_expected_amperage/(2**15)  # 2 amps max yields 0.000061035 A or 610uA resolution
+current_lsb = max_expected_amperage/(2**15)  # 2 amps max yields 0.000061035 A or 61uV resolution
 shunt_resistance = 0.1 # ohms
 calibration_val = trunc((0.04096/(current_lsb * shunt_resistance))) # == 6710 max expected value used for calibration
 # empicial correction to the calibration value
@@ -42,6 +42,9 @@ def rewrite_display(measurement,display_mode,prev_mode):
     elif display_mode == 2:
         fd.print_str("W",106,22)
     
+    elif display_mode == 3:
+        fd.print_str("mV",100,22)
+    
     fd.print_str(str(round(measurement,3)),24,22)
     dsp.show()
 
@@ -52,9 +55,11 @@ def check_display_mode(prev_mode,present_run_mode):
     elif present_run_mode == 0:
         ina.change_pointer_mem_address(ina.voltage_address)
     elif present_run_mode == 1:
-        ina.change_pointer_mem_address(ina.current_address)
+        ina.change_pointer_mem_address(ina.shunt_voltage_address)
     elif present_run_mode == 2:
-        ina.change_pointer_mem_address(ina.power_address)
+        pass
+    elif present_run_mode == 3:
+        ina.change_pointer_mem_address(ina.shunt_voltage_address)
     else:
         print("error in check_change_modes() function")
     
@@ -98,7 +103,7 @@ display_mode = 0 # 0,1,2,3  > 3  --> reset to 0
 # display_mode = 0 voltage
 # display_mode = 1 current
 # display_mode = 2 power
-# display_mode = 3 shunt
+# display_mode = 3 shunt voltage
 
 # change pointer mem address based on prev_mode
 prev_mode = 99
@@ -107,7 +112,7 @@ while True:
     # setup display modes if button goes high
     if button.value() == 1:
         display_mode += 1
-        if display_mode > 2:
+        if display_mode > 3:
             display_mode = 0
 
     # change memory pointer address to retrive correct measurement for voltage, current, power or shunt on display
@@ -123,13 +128,16 @@ while True:
         ina.get_current()
         rewrite_display(ina.current,display_mode,prev_mode)
         prev_mode = 1
-    
     # power
     elif display_mode == 2:
         ina.get_power()
         rewrite_display(ina.power,display_mode,prev_mode)
         prev_mode = 2
     # shunt voltage
+    elif display_mode == 3:
+        ina.get_shunt_voltage()
+        rewrite_display(ina.shunt_voltage,display_mode,prev_mode)
+        prev_mode = 3
     else:
         pass
     
