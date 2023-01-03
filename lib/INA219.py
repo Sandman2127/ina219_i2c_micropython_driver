@@ -65,13 +65,13 @@ class INA219:
             return output_voltage
         elif measurement_type == 'current':
             # shift left 8 to clear the first byte and multiply by the current lsb
-            detected_output_current = ((byte1_int << 8 | byte2_int)) * self.current_lsb
+            detected_output_current = ((byte1_int << 8 | byte2_int) * self.current_lsb)
             # scaling below 8 detected mA where the detected current appears inaccurate
             # equations below empirically determined using an Agilent U1271A as the current detection reference
-            if detected_output_current < 0.008:
-                return 0.42757*detected_output_current**0.488257
+            if detected_output_current <= 0.008:
+                return 0.428*detected_output_current**0.488
             else:
-                return 0.052401*e**(4.3401*detected_output_current)
+                return 0.052*e**(4.340*detected_output_current)
 
             #return detected_output_current
         elif measurement_type == "power":
@@ -82,19 +82,16 @@ class INA219:
         voltage_bytes = self.i2c_sensor.readfrom_mem(self.peripheral_address,self.voltage_address,2) # read 2 bytes from the voltage mem address from the peripheral device
         vbyte1_int,vbyte2_int = list(voltage_bytes)[0],list(voltage_bytes)[1]
         self.voltage = self.convert_measured_bytes(vbyte1_int,vbyte2_int,'voltage')
-        sleep_ms(10)
     def get_current(self):
         current_bytes = self.i2c_sensor.readfrom_mem(self.peripheral_address,self.current_address,2)
         cbyte1_int,cbyte2_int = list(current_bytes)[0],list(current_bytes)[1]
         #print("cbytes:",current_bytes,"\ncbyte1:",cbyte1_int,"\ncbyte2:",cbyte2_int)
         self.current = self.convert_measured_bytes(cbyte1_int,cbyte2_int,'current')
-        sleep_ms(10)
     def get_power(self):
         self.get_voltage()
         self.get_current()
         # P = IV
         self.power = self.voltage * self.current
-        sleep_ms(10)
     """
         ina219 specific data:
         0x399F = 00111001 10011111
