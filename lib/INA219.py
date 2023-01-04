@@ -2,9 +2,8 @@ from micropython import const
 from time import sleep_ms
 from math import e
 
-# INA219(devices[1],mv_voltage_bus_resolution,corrected_calibration_val)
 class INA219:
-    def __init__(self,sensor_configuration,device_address_in,lsb,bus_resolution_mv,calibration_value):
+    def __init__(self,sensor_configuration,device_address_in,shunt_res,lsb,bus_resolution_mv,calibration_value):
         # input required variables stuff
         self.i2c_sensor = sensor_configuration # effectively the object generated from i2c_sensor = I2C(0,sda=sda_screen,scl=scl_screen,freq=400000)
         self.peripheral_address = device_address_in
@@ -13,7 +12,7 @@ class INA219:
         self.calibration_value = calibration_value
         
         # measured values
-        self.shunt_resistance = 0.1
+        self.shunt_resistance = shunt_res
         self.PGA8_resolution = 0.00001 # 10 uV
         self.voltage = 0
         self.current = 0
@@ -27,17 +26,16 @@ class INA219:
         self.current_address = const(3) #'03'
         self.power_address = const(4) #'04'
         self.calibration_address = const(5) #'05'
-        #mv_voltage_bus_resolution = const(4) # 4 mv
         
         print(" *** INA219 Startup ***")
         print("Peripheral device address:",self.peripheral_address)
         print("Bus device resolution:",self.mv_voltage_bus_resolution,"mV")
         print("Current calibration value:",self.calibration_value)
-        # initiate communication with the device:
         
+        # initiate communication with the device:
         # setup configuration, 0 is the config address
         configuration_array = bytearray.fromhex('399F') # '00111001 10011111' == 14751 >>> ba = bytearray.fromhex('399F') # ba[0] << 8 | ba[1] == 14751, standard 4mV resolution default startup
-        print("Initiating communication with device",self.peripheral_address,"with config address",self.config_address,"using binary configuration array:",bin(int('399F',16)))
+        print("Initiating communication with device",self.peripheral_address,"with config address",self.config_address,"using configuration register:",bin(int('399F',16)))
         self.i2c_sensor.writeto_mem(self.peripheral_address,self.config_address,configuration_array)
         
         # setup current calibration, 5 is the calibration address
@@ -57,8 +55,6 @@ class INA219:
         return bytearray.fromhex('0' + str(int_address))
 
     def change_pointer_mem_address(self,mem_address):
-        #print("changing pointer mem_address to:",mem_address)
-        #print("mem address as a byte array:",return_bytearray_of_address(mem_address))
         self.i2c_sensor.writeto(self.peripheral_address,self.bytearray_of_register_address(mem_address))
         
     def convert_measured_bytes(self,byte1_int,byte2_int,measurement_type):
@@ -66,18 +62,6 @@ class INA219:
             # shift left 5 to clear the first byte and right 3 to remove irrelevant data
             output_voltage = (int(byte1_int << 5 | byte2_int >> 3) * self.mv_voltage_bus_resolution)/1000
             return output_voltage
-        elif measurement_type == 'deprecated_current_method':
-            # shift left 8 to clear the first byte and multiply by the current lsb
-            detected_output_current = ((byte1_int << 8 | byte2_int) * self.current_lsb)
-            # scaling below 8 detected mA where the detected current appears inaccurate
-            # equations below empirically determined using an Agilent U1271A as the current detection reference
-            if detected_output_current <= 0.008:
-                return 0.428*detected_output_current**0.488
-            else:
-                return 0.052*e**(4.340*detected_output_current)
-        elif measurement_type == 'power':
-            output_power = int(byte1_int << 8 | byte2_int) * mv_voltage_bus_resolution
-            return output_power
         elif measurement_type == 'shunt_voltage':
             # shift left to clear the first byte
             output_shunt_voltage = int(byte1_int << 8 | byte2_int)
@@ -87,12 +71,6 @@ class INA219:
         voltage_bytes = self.i2c_sensor.readfrom_mem(self.peripheral_address,self.voltage_address,2) # read 2 bytes from the voltage mem address from the peripheral device
         vbyte1_int,vbyte2_int = list(voltage_bytes)[0],list(voltage_bytes)[1]
         self.voltage = self.convert_measured_bytes(vbyte1_int,vbyte2_int,'voltage')
-        
-    def deprecated_get_current(self):
-        current_bytes = self.i2c_sensor.readfrom_mem(self.peripheral_address,self.current_address,2)
-        cbyte1_int,cbyte2_int = list(current_bytes)[0],list(current_bytes)[1]
-        #print("cbytes:",current_bytes,"\ncbyte1:",cbyte1_int,"\ncbyte2:",cbyte2_int)
-        self.current = self.convert_measured_bytes(cbyte1_int,cbyte2_int,'deprecated_current_method')
         
     def get_power(self):
         self.get_voltage()
