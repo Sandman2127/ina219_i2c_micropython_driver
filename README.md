@@ -19,9 +19,9 @@ from math import trunc
 4. enter the max expected amperage (default 2.0)
 
 
-### code to modify
+### code to configure in main.py if you want to display the results on an ssd1306 128x64 screen
 ```
-button_pin = const(16)                #   <int> any GPIO pin on the rpico, pin is kept low and pulsed high to change display modes
+button_pin = const(16)                #   <int> any GPIO pin on the rpico, the pin is kept low through a 100kΩ resistor and pulsed high to change display modes
 ...
 mv_voltage_bus_resolution = const(4)  #   <int> change if different from 4 mV
 max_expected_amperage = 2.0           #   <float> from 0.0 <--> 3.2 with the default 2.0
