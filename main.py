@@ -22,17 +22,8 @@ MeasShuntCurrent = 0.009007
 INA219_Current = 0.0023
 corrected_calibration_val = trunc((calibration_val * MeasShuntCurrent)/INA219_Current)
 
-def rewrite_display(measurement,display_mode,prev_mode):
-    # https://docs.micropython.org/en/latest/esp8266/tutorial/ssd1306.html
-    # overwrite the old stuff
-    #display.fill_rect(x,y,w,h,c):
-    
-    dsp.fill_rect(10,10,128,64, 0)
-    #if prev_mode == display_mode:
-        # just fix the data area
-    #    dsp.fill_rect(10,10,128,64, 0)
-    #else:
-        #dsp.fill_rect(10,10,128,64, 0)       # clear old measurement and draw a solid rectangle 10,10 to 117,53, colour=1 display.fill_rect(10, 10, 107, 43, 1) 
+def rewrite_display(measurement,display_mode):
+    dsp.fill_rect(10,10,128,64, 0)   # clear the entire display
     if display_mode == 0:
         fd.print_str("V",106,22)
             
@@ -121,22 +112,22 @@ while True:
     # voltage
     if display_mode == 0:
         ina.get_voltage()
-        rewrite_display(ina.voltage,display_mode,prev_mode)
+        rewrite_display(ina.voltage,display_mode)
         prev_mode = 0
     # current
     elif display_mode == 1:
         ina.get_current()
-        rewrite_display(ina.current,display_mode,prev_mode)
+        rewrite_display(ina.current,display_mode)
         prev_mode = 1
     # power
     elif display_mode == 2:
         ina.get_power()
-        rewrite_display(ina.power,display_mode,prev_mode)
+        rewrite_display(ina.power,display_mode)
         prev_mode = 2
     # shunt voltage
     elif display_mode == 3:
         ina.get_shunt_voltage()
-        rewrite_display(ina.shunt_voltage,display_mode,prev_mode)
+        rewrite_display(ina.shunt_voltage,display_mode)
         prev_mode = 3
     else:
         pass
