@@ -15,7 +15,7 @@ button = Pin(button_pin, Pin.IN, Pin.PULL_DOWN)
 mv_voltage_bus_resolution = const(4) # 4 mv
 max_expected_amperage = 2.000 # 2 amps
 current_lsb = max_expected_amperage/(2**15)  # 2 amps max yields 0.000061035 A or 61uV resolution
-shunt_resistance = 0.1 # ohms
+shunt_resistance = 0.1 # 100 mOhms
 calibration_val = trunc((0.04096/(current_lsb * shunt_resistance))) # == 6710 max expected value used for calibration
 # empicial correction to the calibration value
 MeasShuntCurrent = 0.009007
@@ -86,7 +86,7 @@ devices = i2c_screen.scan()
 ina219_sensor_address = devices[1]
         
 # setup ina219(i2c_sensor_interface <object> ,sensor_address <int>, current_lsb <float> , mv_voltage_bus_resolution <int>, corrected_calibration_val <int>)
-ina = INA219(i2c_sensor,ina219_sensor_address,current_lsb,mv_voltage_bus_resolution,corrected_calibration_val) 
+ina = INA219(i2c_sensor,ina219_sensor_address,shunt_resistance,current_lsb,mv_voltage_bus_resolution,corrected_calibration_val) 
 
 # measure and display loop
 if len(devices) == 0:
@@ -141,4 +141,4 @@ while True:
     else:
         pass
     
-    time.sleep_ms(250)
+    time.sleep_ms(100)
