@@ -13,13 +13,15 @@ from math import trunc
 
 ### user configuration:
 
-step 1: upload INA219.py to the lib location: /lib/INA219.py on the pico
-step 2: configure the button PIN (default: GP16) 
-step 3: enter the mv_voltage bus resolution if different from the default (4 mV)
-step 4: enter the max expected amperage (default 2.0)
+1. upload INA219.py to the lib location: /lib/INA219.py on the pico
+2. configure the button PIN (default: GP16) 
+3. enter the mv_voltage bus resolution if different from the default (4 mV)
+4. enter the max expected amperage (default 2.0)
 
+
+### code to modify
 ```
-button_pin = const(16)
+button_pin = const(16)                #   <int> any GPIO pin on the rpico, pin is kept low and pulsed high to change display modes
 ...
 mv_voltage_bus_resolution = const(4)  #   <int> change if different from 4 mV
 max_expected_amperage = 2.0           #   <float> from 0.0 <--> 3.2 with the default 2.0
