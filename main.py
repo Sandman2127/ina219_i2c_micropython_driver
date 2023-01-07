@@ -9,7 +9,7 @@ from INA219 import INA219
 from fdrawer import FontDrawer
 
 # set button pin to 16 and set internal pulldown
-button_pin = const(16)
+button_pin = const(5)
 button = Pin(button_pin, Pin.IN, Pin.PULL_DOWN)
 # calibration of current
 mv_voltage_bus_resolution = const(4) # 4 mv
