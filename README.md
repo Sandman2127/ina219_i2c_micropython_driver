@@ -1,8 +1,10 @@
-# Simple Voltage and Amperage display of ina219 i2c module w/ssd1306 128x64 screen
+# Voltage, amperage and power display using the ina219 i2c module w/ssd1306 128x64 screen
 
-### requires only micropython 1.19.1 and the base builtin machine function
+### requires:
+[micropython version: >= v1.19.1-777-g129032941.uf2](https://micropython.org/download/rp2-pico/) due to the new bytearray.fromhex() function
+micropython ssd1306 library (only if using display)
 
-### vital imports:
+### other imports:
 ```
 import time
 from machine import I2C,Pin
